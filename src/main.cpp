@@ -58,16 +58,16 @@ ModbusMessage handleData(ModbusMessage request)
             {
                 request.get(4, registers[offset]);
             }
-            else
+            else // FC 16
             {
-                // For Multiple Registers, data starts after the byte count (at index 7)
-                for (int i = 0; i < count; i++)
-                {
-                    request.get(7 + (i * 2), registers[offset + i]);
+                for (int i = 0; i < count; i++) {
+                    uint16_t val;
+                    // eModbus 'get' from the data payload
+                    request.get(7 + (i * 2), val); 
+                    registers[offset + i] = val;
                 }
             }
-            // Return the standard echo response for writes
-            return request;
+            return request; // Echo for success
         }
     }
 
@@ -78,9 +78,15 @@ ModbusMessage handleData(ModbusMessage request)
 void setup()
 {
     Serial.begin(115200);
-    while (!Serial) {
-        delay(50); 
+    uint32_t startTime = millis();
+    while (!Serial && (millis() - startTime < 10000)) {
+        delay(10);
     }
+
+    // Add a big visible buffer
+    Serial.println("\r\n\n===============================");
+    Serial.println("   ESP32-S3 BOOT SUCCESSFUL    ");
+    Serial.println("===============================");
     Serial.println("\n\nBOOTING...");
     Serial.println("\n--- Modbus Server Starting ---");
 
@@ -123,13 +129,20 @@ void loop()
     converter.reg_val[0] = registers[100];
     converter.reg_val[1] = registers[101];
 
+    uint32_t combinedInt = ((uint32_t)registers[101] << 16) | registers[100];
+    float motorSpeedFloat = (float)combinedInt / 1000.0;
+
     static unsigned long lastPrint = 0;
     if (millis() - lastPrint > 2000)
     {
-        Serial.print("Sensor (Reg 100): ");
-        Serial.print(registers[0]);
-        Serial.print(" | Motor Speed (Reg 200-201): ");
-        Serial.println(converter.f_val);
+        Serial.print("Reg 100: "); Serial.print(registers[0]);
+        
+        // Debug the raw pieces
+        Serial.print(" | R200: 0x"); Serial.print(registers[100], HEX);
+        Serial.print(" | R201: 0x"); Serial.print(registers[101], HEX);
+        
+        Serial.print(" | Final Speed: ");
+        Serial.println(motorSpeedFloat, 3); // 3 decimal places
         lastPrint = millis();
     }
 }
